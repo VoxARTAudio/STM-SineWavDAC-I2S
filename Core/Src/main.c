@@ -18,17 +18,21 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_host.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
-#include "CS43L22.h"
 #include "stm324xg_eval_audio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum {
+	UNKNOWN,
+	HALF_COMPLETED,
+	FULL_COMPLETED
+} CallBack_Result_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -51,6 +55,8 @@ I2C_HandleTypeDef hi2c1;
 I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
+SD_HandleTypeDef hsd;
+
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart3;
@@ -63,8 +69,21 @@ SRAM_HandleTypeDef hsram3;
 #define PI 3.14159f
 
 //Sample rate and Output freq
-#define F_SAMPLE		48000.0f
-#define F_OUT				1500.0f
+float F_SAMPLE = 48000.0;
+float F_OUT	= 1000.0;
+
+//FATFS fatfs;
+//FIL fil;
+//FRESULT fresult;
+
+int16_t samples[32000];
+
+uint32_t fread_size = 0;
+uint32_t rec_size = 0;
+uint32_t played_size = 0;
+
+CallBack_Result_t cb_result = UNKNOWN;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,10 +95,14 @@ static void MX_DAC_Init(void);
 static void MX_FSMC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2S2_Init(void);
-static void MX_USART3_UART_Init(void);
 static void MX_TIM2_Init(void);
-/* USER CODE BEGIN PFP */
+static void MX_SDIO_SD_Init(void);
+static void MX_USART3_UART_Init(void);
+void MX_USB_HOST_Process(void);
 
+/* USER CODE BEGIN PFP */
+void BSP_AUDIO_OUT_HalfTransfer_CallBack();
+void BSP_AUDIO_OUT_TransferComplete_CallBack();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -100,6 +123,7 @@ int16_t dataI2S[100];
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 	sample_dt = F_OUT/F_SAMPLE;
 	sample_N = F_SAMPLE/F_OUT;
@@ -129,14 +153,28 @@ int main(void)
   MX_FSMC_Init();
   MX_I2C1_Init();
   MX_I2S2_Init();
-  MX_USART3_UART_Init();
   MX_TIM2_Init();
+  MX_USB_HOST_Init();
+  MX_SDIO_SD_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-//	cs43l22_Init(0x94, OUTPUT_DEVICE_HEADPHONE, 100, 48000);
-//	cs43l22_SetVolume(0x94, 40); //0 - 100,, 40
-//	cs43l22_Enable_RightLeft(CS43_RIGHT_LEFT);
-//	cs43l22_Start();
-
+	
+//	fresult = f_mount(&fatfs, "", 1);
+//	
+//	if(fresult != FR_OK) {
+//		while (1) {};
+//	}
+//	
+//	f_open(&fil, "recording.wav", FA_READ);
+//	
+//	f_lseek(&fil, 40);
+//	
+//	f_read(&fil, &rec_size, 4, (UINT *)fread_size);
+//	
+//	rec_size /= 2;
+//	
+//	f_read(&fil, samples, 64000, (UINT *) fread_size);
+	
 	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 	
 	HAL_TIM_Base_Start_IT(&htim2);
@@ -151,8 +189,8 @@ int main(void)
 		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
 	}
 	
+	//HAL I2S Transmit
 	BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N*2);
-	//HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t *)dataI2S, sample_N*2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -160,6 +198,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
   }
@@ -373,6 +412,38 @@ static void MX_I2S2_Init(void)
 }
 
 /**
+  * @brief SDIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SDIO_SD_Init(void)
+{
+
+  /* USER CODE BEGIN SDIO_Init 0 */
+
+  /* USER CODE END SDIO_Init 0 */
+
+  /* USER CODE BEGIN SDIO_Init 1 */
+
+  /* USER CODE END SDIO_Init 1 */
+  hsd.Instance = SDIO;
+  hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
+  hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
+  hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
+  hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
+  hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
+  hsd.Init.ClockDiv = 0;
+  if (HAL_SD_Init(&hsd) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SDIO_Init 2 */
+
+  /* USER CODE END SDIO_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -529,14 +600,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : MicroSDCard_CLK_Pin MicroSDCard_D1_Pin MicroSDCard_D0_Pin */
-  GPIO_InitStruct.Pin = MicroSDCard_CLK_Pin|MicroSDCard_D1_Pin|MicroSDCard_D0_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
   /*Configure GPIO pin : User_Button_Pin */
   GPIO_InitStruct.Pin = User_Button_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
@@ -549,14 +612,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : USB_FS_DP_Pin USB_FS_DM_Pin USB_FS_ID_Pin */
-  GPIO_InitStruct.Pin = USB_FS_DP_Pin|USB_FS_DM_Pin|USB_FS_ID_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : DCMI_D7_Pin DCMI_D6_Pin DCMI_VSYNC_Pin DCMI_D5_Pin */
   GPIO_InitStruct.Pin = DCMI_D7_Pin|DCMI_D6_Pin|DCMI_VSYNC_Pin|DCMI_D5_Pin;
@@ -578,14 +633,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED3_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : MicroSDCard_CMD_Pin */
-  GPIO_InitStruct.Pin = MicroSDCard_CMD_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
-  HAL_GPIO_Init(MicroSDCard_CMD_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SmartCard_3_5V_Pin OTG_FS_PowerSwitchOn_Pin */
   GPIO_InitStruct.Pin = SmartCard_3_5V_Pin|OTG_FS_PowerSwitchOn_Pin;
@@ -625,12 +672,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.Alternate = GPIO_AF13_DCMI;
   HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : VBUS_FS_Pin */
-  GPIO_InitStruct.Pin = VBUS_FS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(VBUS_FS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MII_CRS_Pin MII_COL_Pin MII_RXD2_Pin MII_RXD3_Pin */
   GPIO_InitStruct.Pin = MII_CRS_Pin|MII_COL_Pin|MII_RXD2_Pin|MII_RXD3_Pin;
@@ -716,6 +757,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pin : DCMI_PIXCK_Pin */
   GPIO_InitStruct.Pin = DCMI_PIXCK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -743,6 +790,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MII_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -883,6 +934,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		i_t++;
 		if(i_t>= sample_N) i_t = 0;
 	}
+}
+
+void BSP_AUDIO_OUT_HalfTransfer_CallBack() {
+	cb_result = HALF_COMPLETED;
+}
+
+void BSP_AUDIO_OUT_TransferComplete_CallBack() {
+	cb_result = FULL_COMPLETED;
+	played_size += 32000;
 }
 /* USER CODE END 4 */
 

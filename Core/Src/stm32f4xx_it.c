@@ -22,6 +22,9 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
+#include "stm324xg_eval_audio.h"
+#define PI 3.14159f
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,7 +44,14 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+extern float F_OUT;
+extern float sample_dt;
+extern float F_SAMPLE;
+extern float mySinVal;
+extern uint32_t myDacVal;
+extern uint16_t sample_N;
+extern int16_t dataI2S[100];
+int N = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,6 +65,7 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN EV */
@@ -200,6 +211,35 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles EXTI line0 interrupt.
+  */
+void EXTI0_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+	//N++;
+	F_OUT += 50;
+	//F_OUT = F_OUT*pow(2, N/12);
+	
+	sample_dt = F_OUT/F_SAMPLE;
+	sample_N = F_SAMPLE/F_OUT;
+	
+	for(uint16_t i=0; i<sample_N; i++)
+	{
+		mySinVal = sinf(i*2*PI*sample_dt);
+		dataI2S[i*2] = (mySinVal )*8000;    //Right data (0 2 4 6 8 10 12)
+		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
+	}
+	BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+	BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N*2);
+	
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+
+  /* USER CODE END EXTI0_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA1 stream4 global interrupt.
   */
 void DMA1_Stream4_IRQHandler(void)
@@ -225,6 +265,20 @@ void TIM2_IRQHandler(void)
   /* USER CODE BEGIN TIM2_IRQn 1 */
 
   /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USB On The Go FS global interrupt.
+  */
+void OTG_FS_IRQHandler(void)
+{
+  /* USER CODE BEGIN OTG_FS_IRQn 0 */
+
+  /* USER CODE END OTG_FS_IRQn 0 */
+  HAL_HCD_IRQHandler(&hhcd_USB_OTG_FS);
+  /* USER CODE BEGIN OTG_FS_IRQn 1 */
+
+  /* USER CODE END OTG_FS_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

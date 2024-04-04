@@ -111,10 +111,6 @@ void Error_Handler(void);
 #define FSMC_NWAIT_GPIO_Port GPIOD
 #define D2_Pin GPIO_PIN_0
 #define D2_GPIO_Port GPIOD
-#define MicroSDCard_D3_Pin GPIO_PIN_11
-#define MicroSDCard_D3_GPIO_Port GPIOC
-#define MicroSDCard_D2_Pin GPIO_PIN_10
-#define MicroSDCard_D2_GPIO_Port GPIOC
 #define USB_FS_DP_Pin GPIO_PIN_12
 #define USB_FS_DP_GPIO_Port GPIOA
 #define DCMI_D7_Pin GPIO_PIN_7
@@ -253,8 +249,6 @@ void Error_Handler(void);
 #define A18_GPIO_Port GPIOD
 #define MII_RX_CLK_RMII_REF_CLK_Pin GPIO_PIN_1
 #define MII_RX_CLK_RMII_REF_CLK_GPIO_Port GPIOA
-#define WAKEUP_Pin GPIO_PIN_0
-#define WAKEUP_GPIO_Port GPIOA
 #define Audio_DAC_OUT_Pin GPIO_PIN_4
 #define Audio_DAC_OUT_GPIO_Port GPIOA
 #define MII_RXD0_Pin GPIO_PIN_4
