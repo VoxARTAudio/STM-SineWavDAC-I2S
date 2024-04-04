@@ -18,11 +18,13 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 #include "usb_host.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <math.h>
+#include <stdbool.h>
 #include "stm324xg_eval_audio.h"
 /* USER CODE END Includes */
 
@@ -33,6 +35,31 @@ typedef enum {
 	HALF_COMPLETED,
 	FULL_COMPLETED
 } CallBack_Result_t;
+
+typedef enum {
+	AUDIO_STATE_IDLE,
+	AUDIO_STATE_WAIT,
+	AUDIO_STATE_INIT,
+	AUDIO_STATE_PLAY
+} Audio_Playback_State_t;
+
+typedef struct {
+  uint32_t ChunkID;       /* 0 */
+  uint32_t FileSize;      /* 4 */
+  uint32_t FileFormat;    /* 8 */
+  uint32_t SubChunk1ID;   /* 12 */
+  uint32_t SubChunk1Size; /* 16*/
+  uint16_t AudioFormat;   /* 20 */
+  uint16_t NbrChannels;   /* 22 */
+  uint32_t SampleRate;    /* 24 */
+
+  uint32_t ByteRate;      /* 28 */
+  uint16_t BlockAlign;    /* 32 */
+  uint16_t BitPerSample;  /* 34 */
+  uint32_t SubChunk2ID;   /* 36 */
+  uint32_t SubChunk2Size; /* 40 */
+}WAVE_FormatTypeDef;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -55,8 +82,6 @@ I2C_HandleTypeDef hi2c1;
 I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
-SD_HandleTypeDef hsd;
-
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart3;
@@ -67,16 +92,22 @@ SRAM_HandleTypeDef hsram3;
 
 /* USER CODE BEGIN PV */
 #define PI 3.14159f
+#define NUM_SAMPLES 32000
 
 //Sample rate and Output freq
 float F_SAMPLE = 48000.0;
 float F_OUT	= 1000.0;
 
-//FATFS fatfs;
-//FIL fil;
-//FRESULT fresult;
+FATFS fatfs;
+FIL fil;
+FRESULT fresult;
 
-int16_t samples[32000];
+int16_t samples[NUM_SAMPLES];
+
+WAVE_FormatTypeDef WaveFormat;
+
+extern ApplicationTypeDef Appli_state;
+Audio_Playback_State_t AudioState = AUDIO_STATE_IDLE;
 
 uint32_t fread_size = 0;
 uint32_t rec_size = 0;
@@ -96,13 +127,12 @@ static void MX_FSMC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2S2_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_SDIO_SD_Init(void);
 static void MX_USART3_UART_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
-void BSP_AUDIO_OUT_HalfTransfer_CallBack();
-void BSP_AUDIO_OUT_TransferComplete_CallBack();
+void BSP_AUDIO_OUT_HalfTransfer_CallBack(void);
+void BSP_AUDIO_OUT_TransferComplete_CallBack(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -155,13 +185,14 @@ int main(void)
   MX_I2S2_Init();
   MX_TIM2_Init();
   MX_USB_HOST_Init();
-  MX_SDIO_SD_Init();
   MX_USART3_UART_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 	
 //	fresult = f_mount(&fatfs, "", 1);
 //	
 //	if(fresult != FR_OK) {
+//		BSP_LED_On(LED1);
 //		while (1) {};
 //	}
 //	
@@ -175,22 +206,24 @@ int main(void)
 //	
 //	f_read(&fil, samples, 64000, (UINT *) fread_size);
 	
-	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-	
-	HAL_TIM_Base_Start_IT(&htim2);
+//	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+//	
+//	HAL_TIM_Base_Start_IT(&htim2);
 	
 	BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 100, 48000); 
 	
+	bool isFinished = false;
+	
 	//Build Sine wave
-	for(uint16_t i=0; i<sample_N; i++)
-	{
-		mySinVal = sinf(i*2*PI*sample_dt);
-		dataI2S[i*2] = (mySinVal )*8000;    //Right data (0 2 4 6 8 10 12)
-		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
-	}
+//	for(uint16_t i=0; i<sample_N; i++)
+//	{
+//		mySinVal = sinf(i*2*PI*sample_dt);
+//		dataI2S[i*2] = (mySinVal )*8000;    //Right data (0 2 4 6 8 10 12)
+//		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
+//	}
 	
 	//HAL I2S Transmit
-	BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N*2);
+	//BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -201,7 +234,42 @@ int main(void)
     MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
-  }
+
+		if(Appli_state == APPLICATION_READY) {
+			//Mount USB and open file
+			fresult = f_mount(&USBHFatFS, USBHPath, 1);
+			f_open(&fil, "recording.wav", FA_READ);
+			
+			//Get wav header data
+			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
+			f_lseek(&fil, 0);
+			
+			//Fill buffer fully and play
+			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
+				AudioState = AUDIO_STATE_PLAY;
+				if(fread_size != 0) {
+					BSP_AUDIO_OUT_Play((uint16_t*)samples, NUM_SAMPLES);
+				}
+			}
+			while(!isFinished) {
+				//Fill buffers when song isnt playing specific half's
+				if(AudioState == AUDIO_STATE_PLAY) {
+					if(cb_result == HALF_COMPLETED) {
+						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+							BSP_LED_On(LED2);
+						}
+						cb_result = UNKNOWN;
+					}
+					if(cb_result == FULL_COMPLETED) {
+						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+							BSP_LED_On(LED2);
+						}
+						cb_result = UNKNOWN;
+					}
+				}
+		}	
+	}
+}
   /* USER CODE END 3 */
 }
 
@@ -412,38 +480,6 @@ static void MX_I2S2_Init(void)
 }
 
 /**
-  * @brief SDIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SDIO_SD_Init(void)
-{
-
-  /* USER CODE BEGIN SDIO_Init 0 */
-
-  /* USER CODE END SDIO_Init 0 */
-
-  /* USER CODE BEGIN SDIO_Init 1 */
-
-  /* USER CODE END SDIO_Init 1 */
-  hsd.Instance = SDIO;
-  hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
-  hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
-  hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
-  hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
-  hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd.Init.ClockDiv = 0;
-  if (HAL_SD_Init(&hsd) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SDIO_Init 2 */
-
-  /* USER CODE END SDIO_Init 2 */
-
-}
-
-/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -583,9 +619,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(MII_TXD3_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ULPI_D7_Pin ULPI_D5_Pin ULPI_D6_Pin ULPI_D2_Pin
-                           ULPI_D1_Pin ULPI_D3_Pin ULPI_D4_Pin */
+                           ULPI_D1_Pin */
   GPIO_InitStruct.Pin = ULPI_D7_Pin|ULPI_D5_Pin|ULPI_D6_Pin|ULPI_D2_Pin
-                          |ULPI_D1_Pin|ULPI_D3_Pin|ULPI_D4_Pin;
+                          |ULPI_D1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -599,6 +635,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : MicroSDCard_CLK_Pin MicroSDCard_D1_Pin MicroSDCard_D0_Pin */
+  GPIO_InitStruct.Pin = MicroSDCard_CLK_Pin|MicroSDCard_D1_Pin|MicroSDCard_D0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : User_Button_Pin */
   GPIO_InitStruct.Pin = User_Button_Pin;
@@ -633,6 +677,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : MicroSDCard_CMD_Pin */
+  GPIO_InitStruct.Pin = MicroSDCard_CMD_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
+  HAL_GPIO_Init(MicroSDCard_CMD_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SmartCard_3_5V_Pin OTG_FS_PowerSwitchOn_Pin */
   GPIO_InitStruct.Pin = SmartCard_3_5V_Pin|OTG_FS_PowerSwitchOn_Pin;
@@ -942,7 +994,7 @@ void BSP_AUDIO_OUT_HalfTransfer_CallBack() {
 
 void BSP_AUDIO_OUT_TransferComplete_CallBack() {
 	cb_result = FULL_COMPLETED;
-	played_size += 32000;
+	played_size += NUM_SAMPLES;
 }
 /* USER CODE END 4 */
 

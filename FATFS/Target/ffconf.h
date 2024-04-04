@@ -24,7 +24,10 @@
 /-----------------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
-#include "bsp_driver_sd.h"
+#include "usbh_core.h"
+#include "usbh_msc.h"
+/* Handle for USB Host */
+#define hUSB_Host hUsbHostFS
 
 /*-----------------------------------------------------------------------------/
 / Function Configurations
@@ -109,7 +112,7 @@
 /   950 - Traditional Chinese (DBCS)
 */
 
-#define _USE_LFN     0    /* 0 to 3 */
+#define _USE_LFN     1    /* 0 to 3 */
 #define _MAX_LFN     255  /* Maximum LFN length to handle (12 to 255) */
 /* The _USE_LFN switches the support of long file name (LFN).
 /

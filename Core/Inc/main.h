@@ -315,10 +315,6 @@ void Error_Handler(void);
 #define D9_GPIO_Port GPIOE
 #define D12_Pin GPIO_PIN_15
 #define D12_GPIO_Port GPIOE
-#define ULPI_D3_Pin GPIO_PIN_10
-#define ULPI_D3_GPIO_Port GPIOB
-#define ULPI_D4_Pin GPIO_PIN_11
-#define ULPI_D4_GPIO_Port GPIOB
 #define MII_INT_Pin GPIO_PIN_14
 #define MII_INT_GPIO_Port GPIOB
 
