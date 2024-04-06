@@ -31,16 +31,17 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef enum {
-	UNKNOWN,
+	UNKNOWN = 0,
 	HALF_COMPLETED,
 	FULL_COMPLETED
 } CallBack_Result_t;
 
 typedef enum {
-	AUDIO_STATE_IDLE,
+	AUDIO_STATE_IDLE = 0,
 	AUDIO_STATE_WAIT,
 	AUDIO_STATE_INIT,
-	AUDIO_STATE_PLAY
+	AUDIO_STATE_PLAY,
+	AUDIO_STATE_STOP
 } Audio_Playback_State_t;
 
 typedef struct {
@@ -83,6 +84,7 @@ I2S_HandleTypeDef hi2s2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim11;
 
 UART_HandleTypeDef huart3;
 
@@ -92,7 +94,7 @@ SRAM_HandleTypeDef hsram3;
 
 /* USER CODE BEGIN PV */
 #define PI 3.14159f
-#define NUM_SAMPLES 32000
+#define NUM_SAMPLES 4096
 
 //Sample rate and Output freq
 float F_SAMPLE = 48000.0;
@@ -102,13 +104,14 @@ FATFS fatfs;
 FIL fil;
 FRESULT fresult;
 
-int16_t samples[NUM_SAMPLES];
+uint8_t samples[NUM_SAMPLES];
 
 WAVE_FormatTypeDef WaveFormat;
 
 extern ApplicationTypeDef Appli_state;
 Audio_Playback_State_t AudioState = AUDIO_STATE_IDLE;
 
+//USB AUDIO FILE STUFF
 uint32_t fread_size = 0;
 uint32_t rec_size = 0;
 uint32_t played_size = 0;
@@ -128,6 +131,7 @@ static void MX_I2C1_Init(void);
 static void MX_I2S2_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_TIM11_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
@@ -137,13 +141,12 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+//WAVE VARIABLES
 float mySinVal;
 float sample_dt;
 uint16_t sample_N;
 uint16_t i_t;
-
 uint32_t myDacVal;
-
 int16_t dataI2S[100];
 /* USER CODE END 0 */
 
@@ -187,6 +190,7 @@ int main(void)
   MX_USB_HOST_Init();
   MX_USART3_UART_Init();
   MX_FATFS_Init();
+  MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
 	
 //	fresult = f_mount(&fatfs, "", 1);
@@ -210,7 +214,7 @@ int main(void)
 //	
 //	HAL_TIM_Base_Start_IT(&htim2);
 	
-	BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 100, 48000); 
+	BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, 48000); 
 	
 	bool isFinished = false;
 	
@@ -238,34 +242,46 @@ int main(void)
 		if(Appli_state == APPLICATION_READY) {
 			//Mount USB and open file
 			fresult = f_mount(&USBHFatFS, USBHPath, 1);
-			f_open(&fil, "recording.wav", FA_READ);
+			f_open(&fil, "faded.wav", FA_READ);
 			
 			//Get wav header data
 			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
 			f_lseek(&fil, 0);
 			
-			//Fill buffer fully and play
+			//Fill buffer fully and play first time
 			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
 				AudioState = AUDIO_STATE_PLAY;
 				if(fread_size != 0) {
-					BSP_AUDIO_OUT_Play((uint16_t*)samples, NUM_SAMPLES);
+					BSP_AUDIO_OUT_Play((uint16_t*)&samples[0], NUM_SAMPLES);
+					played_size = fread_size;
 				}
 			}
 			while(!isFinished) {
 				//Fill buffers when song isnt playing specific half's
 				if(AudioState == AUDIO_STATE_PLAY) {
+					if(played_size >= WaveFormat.FileSize) {
+						BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+						AudioState = AUDIO_STATE_STOP;
+					}
+					
 					if(cb_result == HALF_COMPLETED) {
 						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
 							BSP_LED_On(LED2);
 						}
 						cb_result = UNKNOWN;
+						played_size += fread_size;
 					}
+					
 					if(cb_result == FULL_COMPLETED) {
 						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
 							BSP_LED_On(LED2);
 						}
 						cb_result = UNKNOWN;
+						played_size += fread_size;
 					}
+				}
+				if(AudioState == AUDIO_STATE_STOP) {
+					isFinished = true;
 				}
 		}	
 	}
@@ -525,6 +541,37 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM11 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM11_Init(void)
+{
+
+  /* USER CODE BEGIN TIM11_Init 0 */
+
+  /* USER CODE END TIM11_Init 0 */
+
+  /* USER CODE BEGIN TIM11_Init 1 */
+
+  /* USER CODE END TIM11_Init 1 */
+  htim11.Instance = TIM11;
+  htim11.Init.Prescaler = 100-1;
+  htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim11.Init.Period = 840-1;
+  htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM11_Init 2 */
+
+  /* USER CODE END TIM11_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -646,7 +693,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : User_Button_Pin */
   GPIO_InitStruct.Pin = User_Button_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(User_Button_GPIO_Port, &GPIO_InitStruct);
 
@@ -670,6 +717,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(IO_Expander_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Tamper_Button_Pin */
+  GPIO_InitStruct.Pin = Tamper_Button_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(Tamper_Button_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LED3_Pin */
   GPIO_InitStruct.Pin = LED3_Pin;
@@ -847,6 +900,9 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -989,12 +1045,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 
 void BSP_AUDIO_OUT_HalfTransfer_CallBack() {
+	if(AudioState == AUDIO_STATE_PLAY) {
 	cb_result = HALF_COMPLETED;
+	}
 }
 
 void BSP_AUDIO_OUT_TransferComplete_CallBack() {
+	if(AudioState == AUDIO_STATE_PLAY) {
 	cb_result = FULL_COMPLETED;
-	played_size += NUM_SAMPLES;
+	}
 }
 /* USER CODE END 4 */
 

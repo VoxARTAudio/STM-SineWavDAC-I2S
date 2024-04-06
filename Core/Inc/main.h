@@ -101,6 +101,7 @@ void Error_Handler(void);
 #define I2C1_SCL_GPIO_Port GPIOB
 #define User_Button_Pin GPIO_PIN_15
 #define User_Button_GPIO_Port GPIOG
+#define User_Button_EXTI_IRQn EXTI15_10_IRQn
 #define SmartCard_CMDVCC_Pin GPIO_PIN_12
 #define SmartCard_CMDVCC_GPIO_Port GPIOG
 #define MII_TX_EN_Pin GPIO_PIN_11
@@ -131,8 +132,9 @@ void Error_Handler(void);
 #define IO_Expander_INT_GPIO_Port GPIOI
 #define USB_FS_DM_Pin GPIO_PIN_11
 #define USB_FS_DM_GPIO_Port GPIOA
-#define Anti_Tamper_Pin GPIO_PIN_13
-#define Anti_Tamper_GPIO_Port GPIOC
+#define Tamper_Button_Pin GPIO_PIN_13
+#define Tamper_Button_GPIO_Port GPIOC
+#define Tamper_Button_EXTI_IRQn EXTI15_10_IRQn
 #define LED3_Pin GPIO_PIN_9
 #define LED3_GPIO_Port GPIOI
 #define DCMI_D5_Pin GPIO_PIN_4
@@ -305,6 +307,7 @@ void Error_Handler(void);
 #define ULPI_D1_GPIO_Port GPIOB
 #define OTG_FS_OverCurrent_Pin GPIO_PIN_11
 #define OTG_FS_OverCurrent_GPIO_Port GPIOF
+#define OTG_FS_OverCurrent_EXTI_IRQn EXTI15_10_IRQn
 #define A8_Pin GPIO_PIN_14
 #define A8_GPIO_Port GPIOF
 #define D4_Pin GPIO_PIN_7
@@ -317,6 +320,7 @@ void Error_Handler(void);
 #define D12_GPIO_Port GPIOE
 #define MII_INT_Pin GPIO_PIN_14
 #define MII_INT_GPIO_Port GPIOB
+#define MII_INT_EXTI_IRQn EXTI15_10_IRQn
 
 /* USER CODE BEGIN Private defines */
 
