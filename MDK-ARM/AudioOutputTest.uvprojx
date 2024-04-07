@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F407xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../Drivers/BSP/STM324xG_EVAL;../Drivers/BSP/Components/cs43l22;../Drivers/BSP/Components/stmpe811;../FATFS/Target;../FATFS/App;../Middlewares/Third_Party/FatFs/src;../USB_HOST/App;../USB_HOST/Target;../Middlewares/ST/STM32_USB_Host_Library/Core/Inc;../Drivers/Fusion;../Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Inc</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../Drivers/BSP/STM324xG_EVAL;../Drivers/BSP/Components/cs43l22;../Drivers/BSP/Components/stmpe811;../FATFS/Target;../FATFS/App;../Middlewares/Third_Party/FatFs/src;../USB_HOST/App;../USB_HOST/Target;../Middlewares/ST/STM32_USB_Host_Library/Core/Inc;../Drivers/Fusion;../Middlewares/ST/STM32_USB_Host_Library/Class/MSC/Inc;..\Drivers\BSP\Components\ili9325</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -408,6 +408,21 @@
               <FileName>stm32f4xx_hal_msp.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32f4xx_hal_msp.c</FilePath>
+            </File>
+            <File>
+              <FileName>imu_parser.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\imu_parser.c</FilePath>
+            </File>
+            <File>
+              <FileName>mpu6050.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\mpu6050.c</FilePath>
+            </File>
+            <File>
+              <FileName>voxart_dev.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\voxart_dev.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -696,6 +711,11 @@
               <FileType>1</FileType>
               <FilePath>..\Drivers\BSP\STM324xG_EVAL\stm324xg_eval.c</FilePath>
             </File>
+            <File>
+              <FileName>stm324xg_eval_lcd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\BSP\STM324xG_EVAL\stm324xg_eval_lcd.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -710,6 +730,11 @@
               <FileName>stmpe811.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Drivers\BSP\Components\stmpe811\stmpe811.c</FilePath>
+            </File>
+            <File>
+              <FileName>ili9325.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\BSP\Components\ili9325\ili9325.c</FilePath>
             </File>
           </Files>
         </Group>

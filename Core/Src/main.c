@@ -26,6 +26,15 @@
 #include <math.h>
 #include <stdbool.h>
 #include "stm324xg_eval_audio.h"
+#include "stm324xg_eval_lcd.h"
+
+//IMU
+#include "mpu6050.h"
+
+// CUSTOM
+#include "voxart_dev.h"
+#include "imu_parser.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +74,8 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define PI 3.14159f
+#define NUM_SAMPLES 4096
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -93,29 +103,35 @@ SRAM_HandleTypeDef hsram2;
 SRAM_HandleTypeDef hsram3;
 
 /* USER CODE BEGIN PV */
-#define PI 3.14159f
-#define NUM_SAMPLES 4096
+MPU6050_t MPU6050;
+circle c = {50, 150, 120};
+imuMovement imu = {0, 0, 0, NO};
 
 //Sample rate and Output freq
 float F_SAMPLE = 48000.0;
 float F_OUT	= 1000.0;
 
+//FatFS
 FATFS fatfs;
 FIL fil;
 FRESULT fresult;
 
+//Samples storage
 uint8_t samples[NUM_SAMPLES];
 
+//Wave header file
 WAVE_FormatTypeDef WaveFormat;
 
+//State tracking of Audio and USB
 extern ApplicationTypeDef Appli_state;
 Audio_Playback_State_t AudioState = AUDIO_STATE_IDLE;
 
-//USB AUDIO FILE STUFF
+//USB AUDIO FILE SIZE STUFF
 uint32_t fread_size = 0;
 uint32_t rec_size = 0;
 uint32_t played_size = 0;
 
+//DMA Thingy
 CallBack_Result_t cb_result = UNKNOWN;
 
 /* USER CODE END PV */
@@ -193,41 +209,33 @@ int main(void)
   MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
 	
-//	fresult = f_mount(&fatfs, "", 1);
-//	
-//	if(fresult != FR_OK) {
-//		BSP_LED_On(LED1);
-//		while (1) {};
-//	}
-//	
-//	f_open(&fil, "recording.wav", FA_READ);
-//	
-//	f_lseek(&fil, 40);
-//	
-//	f_read(&fil, &rec_size, 4, (UINT *)fread_size);
-//	
-//	rec_size /= 2;
-//	
-//	f_read(&fil, samples, 64000, (UINT *) fread_size);
+	//Init audio
+	BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, 48000);
 	
-//	HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-//	
-//	HAL_TIM_Base_Start_IT(&htim2);
+	//Init and enable display
+	BSP_LCD_Init();
+	BSP_LCD_DisplayOn();
+	BSP_LCD_Clear(LCD_COLOR_BLACK);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	
-	BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, 48000); 
+	while (MPU6050_Init(&hi2c1) == 1) {
+		HAL_GPIO_TogglePin(LED1_GPIO_PORT, LED1_PIN);
+		serialPrintln("[MPU6050] MPU ERROR. RESTART SYSTEM");
+		HAL_Delay(1000);
+		BSP_LCD_DisplayStringAt(3, 75, (uint8_t *)"Power Cycle :(", CENTER_MODE);
+	};
+
+	BSP_LCD_FillCircle(c.xPos, c.yPos, c.radius);
+	serialPrintln("[Circle] READY");
+
+	if(HAL_TIM_Base_Start_IT(&htim11) == HAL_OK) {
+		serialPrintln("[Timer] TIM11 ENABLED");
+	} else {
+		BSP_LCD_DisplayStringAtLine(3, (uint8_t*)"TIM11 ERROR");
+		Error_Handler();
+	}
 	
 	bool isFinished = false;
-	
-	//Build Sine wave
-//	for(uint16_t i=0; i<sample_N; i++)
-//	{
-//		mySinVal = sinf(i*2*PI*sample_dt);
-//		dataI2S[i*2] = (mySinVal )*8000;    //Right data (0 2 4 6 8 10 12)
-//		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
-//	}
-	
-	//HAL I2S Transmit
-	//BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -281,6 +289,7 @@ int main(void)
 					}
 				}
 				if(AudioState == AUDIO_STATE_STOP) {
+					BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
 					isFinished = true;
 				}
 		}	

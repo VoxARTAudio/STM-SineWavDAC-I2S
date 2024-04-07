@@ -24,7 +24,13 @@
 /* USER CODE BEGIN Includes */
 #include <math.h>
 #include "stm324xg_eval_audio.h"
-#define PI 3.14159f
+#include "mpu6050.h"
+#include "voxart_dev.h"
+#include "imu_parser.h"
+
+#include "stm324xg_eval_lcd.h"
+#include "stm324xg_eval_io.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,7 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define PI 3.14159f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,14 +50,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern float F_OUT;
-extern float sample_dt;
-extern float F_SAMPLE;
-extern float mySinVal;
-extern uint32_t myDacVal;
-extern uint16_t sample_N;
-extern int16_t dataI2S[100];
-int N = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,7 +69,10 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim11;
 /* USER CODE BEGIN EV */
-
+extern MPU6050_t MPU6050;
+extern circle c;
+extern imuMovement imu;
+extern enum effectState state;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -217,22 +219,12 @@ void SysTick_Handler(void)
 void EXTI0_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI0_IRQn 0 */
-	//N++;
-	F_OUT += 50;
-	//F_OUT = F_OUT*pow(2, N/12);
-	
-	sample_dt = F_OUT/F_SAMPLE;
-	sample_N = F_SAMPLE/F_OUT;
-	
-	for(uint16_t i=0; i<sample_N; i++)
-	{
-		mySinVal = sinf(i*2*PI*sample_dt);
-		dataI2S[i*2] = (mySinVal )*8000;    //Right data (0 2 4 6 8 10 12)
-		dataI2S[i*2 + 1] =(mySinVal )*8000; //Left data  (1 3 5 7 9 11 13)
+	if(state != PITCH) {
+		state = PITCH;
+	} else {
+		state = NONE;
 	}
-	BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-	BSP_AUDIO_OUT_Play((uint16_t *)dataI2S, sample_N*2);
-	
+	serialPrintln("KEY PRESSED");
   /* USER CODE END EXTI0_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_IRQn 1 */
@@ -260,7 +252,75 @@ void DMA1_Stream4_IRQHandler(void)
 void TIM1_TRG_COM_TIM11_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 0 */
+	//MPU6050_Read_All(&hi2c1, &MPU6050);
 
+	parseReverbData();
+	parseChorusData();
+	
+	setStates();
+	
+	if(state == PITCH) {
+		if(MPU6050.KalmanAngleY > 30 && MPU6050.KalmanAngleY < 80) {
+			updateCircle(0, 0, 2);
+		}
+			
+		if(MPU6050.KalmanAngleY > 80 && MPU6050.KalmanAngleY < 190) {
+			updateCircle(0, 0, 6);
+		}
+		
+		if(MPU6050.KalmanAngleY > -185 && MPU6050.KalmanAngleY < -40) {
+			updateCircle(0, 0, -6);
+		}
+		
+		if(MPU6050.KalmanAngleY > -50 && MPU6050.KalmanAngleY < -20) {
+			updateCircle(0, 0, -2);
+		}
+	}
+	
+	if(state == REVERB) {
+		if(imu.x == 1) {
+			//updateCircle(-3, 0, 0);
+		} else if(imu.x == -1) {
+			//updateCircle(3, 0, 0);
+		}
+	}
+	
+	if(state == CHORUS) {
+		if(imu.y == 1) {
+			//serialPrintln("Move Circle +Y");
+			//updateCircle(0, 3, 0);
+		} else if(imu.y == -1) {
+			//serialPrintln("Move Circle -Y");
+			//updateCircle(0, -3, 0);
+		}
+	}
+	
+	switch(state) {
+		case NONE:
+			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+		break;
+		case PITCH:
+			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+		break;
+		case REVERB:
+			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+		break;
+		case CHORUS:
+			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_SET);
+		break;
+	}
   /* USER CODE END TIM1_TRG_COM_TIM11_IRQn 0 */
   HAL_TIM_IRQHandler(&htim11);
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 1 */
@@ -288,7 +348,14 @@ void TIM2_IRQHandler(void)
 void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
-
+	//Reset the circle to starting position
+	BSP_LCD_Clear(LCD_COLOR_BLACK);
+	serialPrintln("[Cirlce] Reset position and scale");
+	state = NONE;
+	BSP_LCD_FillCircle(150, 120, 50);
+	c.xPos = 150;
+	c.yPos = 120;
+	c.radius = 50;
   /* USER CODE END EXTI15_10_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(Tamper_Button_Pin);
   HAL_GPIO_EXTI_IRQHandler(User_Button_Pin);
