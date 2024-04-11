@@ -57,6 +57,13 @@ void updateCircle(int x, int y, int r) {
 }
 
 /* ********************* */
+/*    Audio Effects Test */
+/* ********************* */
+void echoProcessData(uint8_t sample) {
+	
+}
+
+/* ********************* */
 /*    Serial Logging     */
 /* ********************* */
 void serialPrint(char* msg) {

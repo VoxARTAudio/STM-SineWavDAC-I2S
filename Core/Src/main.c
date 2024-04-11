@@ -247,53 +247,54 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-		if(Appli_state == APPLICATION_READY) {
-			//Mount USB and open file
-			fresult = f_mount(&USBHFatFS, USBHPath, 1);
-			f_open(&fil, "faded.wav", FA_READ);
-			
-			//Get wav header data
-			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
-			f_lseek(&fil, 0);
-			
-			//Fill buffer fully and play first time
-			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
-				AudioState = AUDIO_STATE_PLAY;
-				if(fread_size != 0) {
-					BSP_AUDIO_OUT_Play((uint16_t*)&samples[0], NUM_SAMPLES);
-					played_size = fread_size;
-				}
-			}
-			while(!isFinished) {
-				//Fill buffers when song isnt playing specific half's
-				if(AudioState == AUDIO_STATE_PLAY) {
-					if(played_size >= WaveFormat.FileSize) {
-						BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-						AudioState = AUDIO_STATE_STOP;
-					}
-					
-					if(cb_result == HALF_COMPLETED) {
-						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
-							BSP_LED_On(LED2);
-						}
-						cb_result = UNKNOWN;
-						played_size += fread_size;
-					}
-					
-					if(cb_result == FULL_COMPLETED) {
-						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
-							BSP_LED_On(LED2);
-						}
-						cb_result = UNKNOWN;
-						played_size += fread_size;
-					}
-				}
-				if(AudioState == AUDIO_STATE_STOP) {
-					BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-					isFinished = true;
-				}
-		}	
-	}
+//		if(Appli_state == APPLICATION_READY) {
+//			//Mount USB and open file
+//			fresult = f_mount(&USBHFatFS, USBHPath, 1);
+//			f_open(&fil, "faded.wav", FA_READ);
+//		}
+//			
+//			//Get wav header data
+//			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
+//			f_lseek(&fil, 0);
+//			
+//			//Fill buffer fully and play first time
+//			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
+//				AudioState = AUDIO_STATE_PLAY;
+//				if(fread_size != 0) {
+//					BSP_AUDIO_OUT_Play((uint16_t*)&samples[0], NUM_SAMPLES);
+//					played_size = fread_size;
+//				}
+//			}
+//			while(!isFinished) {
+//				//Fill buffers when song isnt playing specific half's
+//				if(AudioState == AUDIO_STATE_PLAY) {
+//					if(played_size >= WaveFormat.FileSize) {
+//						BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+//						AudioState = AUDIO_STATE_STOP;
+//					}
+//					
+//					if(cb_result == HALF_COMPLETED) {
+//						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+//							BSP_LED_On(LED2);
+//						}
+//						cb_result = UNKNOWN;
+//						played_size += fread_size;
+//					}
+//					
+//					if(cb_result == FULL_COMPLETED) {
+//						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+//							BSP_LED_On(LED2);
+//						}
+//						cb_result = UNKNOWN;
+//						played_size += fread_size;
+//					}
+//				}
+//				if(AudioState == AUDIO_STATE_STOP) {
+//					BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+//					isFinished = true;
+//				}
+//		}	
+//	}
 }
   /* USER CODE END 3 */
 }

@@ -252,7 +252,7 @@ void DMA1_Stream4_IRQHandler(void)
 void TIM1_TRG_COM_TIM11_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 0 */
-	//MPU6050_Read_All(&hi2c1, &MPU6050);
+	MPU6050_Read_All(&hi2c1, &MPU6050);
 
 	parseReverbData();
 	parseChorusData();
