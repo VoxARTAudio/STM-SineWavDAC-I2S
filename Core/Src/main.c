@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "fatfs.h"
 #include "usb_host.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -112,9 +111,9 @@ float F_SAMPLE = 48000.0;
 float F_OUT	= 1000.0;
 
 //FatFS
-FATFS fatfs;
-FIL fil;
-FRESULT fresult;
+//FATFS fatfs;
+//FIL fil;
+//FRESULT fresult;
 
 //Samples storage
 uint8_t samples[NUM_SAMPLES];
@@ -205,7 +204,6 @@ int main(void)
   MX_TIM2_Init();
   MX_USB_HOST_Init();
   MX_USART3_UART_Init();
-  MX_FATFS_Init();
   MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
 	
@@ -246,6 +244,7 @@ int main(void)
     MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
+	
 
 //		if(Appli_state == APPLICATION_READY) {
 //			//Mount USB and open file
