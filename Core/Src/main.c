@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 #include "usb_host.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -34,40 +35,12 @@
 #include "voxart_dev.h"
 #include "imu_parser.h"
 
+#include "ChorusTest.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef enum {
-	UNKNOWN = 0,
-	HALF_COMPLETED,
-	FULL_COMPLETED
-} CallBack_Result_t;
-
-typedef enum {
-	AUDIO_STATE_IDLE = 0,
-	AUDIO_STATE_WAIT,
-	AUDIO_STATE_INIT,
-	AUDIO_STATE_PLAY,
-	AUDIO_STATE_STOP
-} Audio_Playback_State_t;
-
-typedef struct {
-  uint32_t ChunkID;       /* 0 */
-  uint32_t FileSize;      /* 4 */
-  uint32_t FileFormat;    /* 8 */
-  uint32_t SubChunk1ID;   /* 12 */
-  uint32_t SubChunk1Size; /* 16*/
-  uint16_t AudioFormat;   /* 20 */
-  uint16_t NbrChannels;   /* 22 */
-  uint32_t SampleRate;    /* 24 */
-
-  uint32_t ByteRate;      /* 28 */
-  uint16_t BlockAlign;    /* 32 */
-  uint16_t BitPerSample;  /* 34 */
-  uint32_t SubChunk2ID;   /* 36 */
-  uint32_t SubChunk2Size; /* 40 */
-}WAVE_FormatTypeDef;
 
 /* USER CODE END PTD */
 
@@ -97,7 +70,7 @@ TIM_HandleTypeDef htim11;
 
 UART_HandleTypeDef huart3;
 
-NOR_HandleTypeDef hnor1;
+SRAM_HandleTypeDef hsram1;
 SRAM_HandleTypeDef hsram2;
 SRAM_HandleTypeDef hsram3;
 
@@ -107,13 +80,12 @@ circle c = {50, 150, 120};
 imuMovement imu = {0, 0, 0, NO};
 
 //Sample rate and Output freq
-float F_SAMPLE = 48000.0;
-float F_OUT	= 1000.0;
+//float F_SAMPLE = 48000.0;
+//float F_OUT	= 1000.0;
 
-//FatFS
-//FATFS fatfs;
-//FIL fil;
-//FRESULT fresult;
+FATFS fatfs;
+FIL fil;
+FRESULT fresult;
 
 //Samples storage
 uint8_t samples[NUM_SAMPLES];
@@ -133,6 +105,8 @@ uint32_t played_size = 0;
 //DMA Thingy
 CallBack_Result_t cb_result = UNKNOWN;
 
+extern 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -141,12 +115,12 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_DAC_Init(void);
-static void MX_FSMC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2S2_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_USART3_UART_Init(void);
 static void MX_TIM11_Init(void);
+static void MX_FSMC_Init(void);
+static void MX_USART3_UART_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
@@ -173,8 +147,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	sample_dt = F_OUT/F_SAMPLE;
-	sample_N = F_SAMPLE/F_OUT;
+//	sample_dt = F_OUT/F_SAMPLE;
+//	sample_N = F_SAMPLE/F_OUT;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -198,13 +172,14 @@ int main(void)
   MX_DMA_Init();
   MX_ADC3_Init();
   MX_DAC_Init();
-  MX_FSMC_Init();
   MX_I2C1_Init();
   MX_I2S2_Init();
   MX_TIM2_Init();
   MX_USB_HOST_Init();
-  MX_USART3_UART_Init();
   MX_TIM11_Init();
+  MX_FATFS_Init();
+  MX_FSMC_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 	
 	//Init audio
@@ -216,12 +191,12 @@ int main(void)
 	BSP_LCD_Clear(LCD_COLOR_BLACK);
 	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	
-	while (MPU6050_Init(&hi2c1) == 1) {
-		HAL_GPIO_TogglePin(LED1_GPIO_PORT, LED1_PIN);
-		serialPrintln("[MPU6050] MPU ERROR. RESTART SYSTEM");
-		HAL_Delay(1000);
-		BSP_LCD_DisplayStringAt(3, 75, (uint8_t *)"Power Cycle :(", CENTER_MODE);
-	};
+//	while (MPU6050_Init(&hi2c1) == 1) {
+//		HAL_GPIO_TogglePin(LED1_GPIO_PORT, LED1_PIN);
+//		serialPrintln("[MPU6050] MPU ERROR. RESTART SYSTEM");
+//		HAL_Delay(1000);
+//		BSP_LCD_DisplayStringAt(3, 75, (uint8_t *)"Power Cycle :(", CENTER_MODE);
+//	};
 
 	BSP_LCD_FillCircle(c.xPos, c.yPos, c.radius);
 	serialPrintln("[Circle] READY");
@@ -246,54 +221,61 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	
 
-//		if(Appli_state == APPLICATION_READY) {
-//			//Mount USB and open file
-//			fresult = f_mount(&USBHFatFS, USBHPath, 1);
-//			f_open(&fil, "faded.wav", FA_READ);
-//		}
-//			
-//			//Get wav header data
-//			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
-//			f_lseek(&fil, 0);
-//			
-//			//Fill buffer fully and play first time
-//			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
-//				AudioState = AUDIO_STATE_PLAY;
-//				if(fread_size != 0) {
-//					BSP_AUDIO_OUT_Play((uint16_t*)&samples[0], NUM_SAMPLES);
-//					played_size = fread_size;
-//				}
-//			}
-//			while(!isFinished) {
-//				//Fill buffers when song isnt playing specific half's
-//				if(AudioState == AUDIO_STATE_PLAY) {
-//					if(played_size >= WaveFormat.FileSize) {
-//						BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-//						AudioState = AUDIO_STATE_STOP;
-//					}
-//					
-//					if(cb_result == HALF_COMPLETED) {
-//						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
-//							BSP_LED_On(LED2);
-//						}
-//						cb_result = UNKNOWN;
-//						played_size += fread_size;
-//					}
-//					
-//					if(cb_result == FULL_COMPLETED) {
-//						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
-//							BSP_LED_On(LED2);
-//						}
-//						cb_result = UNKNOWN;
-//						played_size += fread_size;
-//					}
-//				}
-//				if(AudioState == AUDIO_STATE_STOP) {
-//					BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
-//					isFinished = true;
-//				}
-//		}	
-//	}
+		if(Appli_state == APPLICATION_READY) {
+			//Mount USB and open file 
+			fresult = f_mount(&USBHFatFS, USBHPath, 1);
+			f_open(&fil, "faded.wav", FA_READ);
+			BSP_LED_On(LED1);
+		
+			
+			//Get wav header data
+			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
+			f_lseek(&fil, 0);
+			
+			//Fill buffer fully and play first time
+			if(f_read(&fil, &samples[0], NUM_SAMPLES,(void*)&fread_size) == FR_OK) {
+				AudioState = AUDIO_STATE_PLAY;
+				if(fread_size != 0) {
+					BSP_AUDIO_OUT_Play((uint16_t*)&samples[0], NUM_SAMPLES);
+					played_size = fread_size;
+				}
+			} else {
+				while(1) {
+					HAL_Delay(500);
+					BSP_LED_Toggle(LED2);
+				}
+			}
+			while(!isFinished) {
+				//Fill buffers when song isnt playing specific half's
+				if(AudioState == AUDIO_STATE_PLAY) {
+					if(played_size >= WaveFormat.FileSize) {
+						BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+						AudioState = AUDIO_STATE_STOP;
+					}
+					
+					if(cb_result == HALF_COMPLETED) {
+						if(f_read(&fil, &samples[0], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+							BSP_LED_On(LED2);
+						}
+						cb_result = UNKNOWN;
+						played_size += fread_size;
+					}
+					
+					if(cb_result == FULL_COMPLETED) {
+						if(f_read(&fil, &samples[NUM_SAMPLES/2], NUM_SAMPLES/2,(void*)&fread_size) != FR_OK) {
+							BSP_LED_On(LED2);
+						}
+						chorusEffect();
+						cb_result = UNKNOWN;
+						played_size += fread_size;
+					}
+				}
+				if(AudioState == AUDIO_STATE_STOP) {
+					BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+					isFinished = true;
+				}
+		}	
+	}
 }
   /* USER CODE END 3 */
 }
@@ -930,25 +912,25 @@ static void MX_FSMC_Init(void)
 
   /* USER CODE END FSMC_Init 1 */
 
-  /** Perform the NOR1 memory initialization sequence
+  /** Perform the SRAM1 memory initialization sequence
   */
-  hnor1.Instance = FSMC_NORSRAM_DEVICE;
-  hnor1.Extended = FSMC_NORSRAM_EXTENDED_DEVICE;
-  /* hnor1.Init */
-  hnor1.Init.NSBank = FSMC_NORSRAM_BANK1;
-  hnor1.Init.DataAddressMux = FSMC_DATA_ADDRESS_MUX_DISABLE;
-  hnor1.Init.MemoryType = FSMC_MEMORY_TYPE_NOR;
-  hnor1.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_16;
-  hnor1.Init.BurstAccessMode = FSMC_BURST_ACCESS_MODE_DISABLE;
-  hnor1.Init.WaitSignalPolarity = FSMC_WAIT_SIGNAL_POLARITY_LOW;
-  hnor1.Init.WrapMode = FSMC_WRAP_MODE_DISABLE;
-  hnor1.Init.WaitSignalActive = FSMC_WAIT_TIMING_BEFORE_WS;
-  hnor1.Init.WriteOperation = FSMC_WRITE_OPERATION_DISABLE;
-  hnor1.Init.WaitSignal = FSMC_WAIT_SIGNAL_DISABLE;
-  hnor1.Init.ExtendedMode = FSMC_EXTENDED_MODE_DISABLE;
-  hnor1.Init.AsynchronousWait = FSMC_ASYNCHRONOUS_WAIT_DISABLE;
-  hnor1.Init.WriteBurst = FSMC_WRITE_BURST_DISABLE;
-  hnor1.Init.PageSize = FSMC_PAGE_SIZE_NONE;
+  hsram1.Instance = FSMC_NORSRAM_DEVICE;
+  hsram1.Extended = FSMC_NORSRAM_EXTENDED_DEVICE;
+  /* hsram1.Init */
+  hsram1.Init.NSBank = FSMC_NORSRAM_BANK1;
+  hsram1.Init.DataAddressMux = FSMC_DATA_ADDRESS_MUX_DISABLE;
+  hsram1.Init.MemoryType = FSMC_MEMORY_TYPE_SRAM;
+  hsram1.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_8;
+  hsram1.Init.BurstAccessMode = FSMC_BURST_ACCESS_MODE_DISABLE;
+  hsram1.Init.WaitSignalPolarity = FSMC_WAIT_SIGNAL_POLARITY_LOW;
+  hsram1.Init.WrapMode = FSMC_WRAP_MODE_DISABLE;
+  hsram1.Init.WaitSignalActive = FSMC_WAIT_TIMING_BEFORE_WS;
+  hsram1.Init.WriteOperation = FSMC_WRITE_OPERATION_ENABLE;
+  hsram1.Init.WaitSignal = FSMC_WAIT_SIGNAL_DISABLE;
+  hsram1.Init.ExtendedMode = FSMC_EXTENDED_MODE_DISABLE;
+  hsram1.Init.AsynchronousWait = FSMC_ASYNCHRONOUS_WAIT_DISABLE;
+  hsram1.Init.WriteBurst = FSMC_WRITE_BURST_DISABLE;
+  hsram1.Init.PageSize = FSMC_PAGE_SIZE_NONE;
   /* Timing */
   Timing.AddressSetupTime = 15;
   Timing.AddressHoldTime = 15;
@@ -959,7 +941,7 @@ static void MX_FSMC_Init(void)
   Timing.AccessMode = FSMC_ACCESS_MODE_A;
   /* ExtTiming */
 
-  if (HAL_NOR_Init(&hnor1, &Timing, NULL) != HAL_OK)
+  if (HAL_SRAM_Init(&hsram1, &Timing, NULL) != HAL_OK)
   {
     Error_Handler( );
   }
@@ -972,12 +954,12 @@ static void MX_FSMC_Init(void)
   hsram2.Init.NSBank = FSMC_NORSRAM_BANK2;
   hsram2.Init.DataAddressMux = FSMC_DATA_ADDRESS_MUX_DISABLE;
   hsram2.Init.MemoryType = FSMC_MEMORY_TYPE_SRAM;
-  hsram2.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_16;
+  hsram2.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_8;
   hsram2.Init.BurstAccessMode = FSMC_BURST_ACCESS_MODE_DISABLE;
   hsram2.Init.WaitSignalPolarity = FSMC_WAIT_SIGNAL_POLARITY_LOW;
   hsram2.Init.WrapMode = FSMC_WRAP_MODE_DISABLE;
   hsram2.Init.WaitSignalActive = FSMC_WAIT_TIMING_BEFORE_WS;
-  hsram2.Init.WriteOperation = FSMC_WRITE_OPERATION_DISABLE;
+  hsram2.Init.WriteOperation = FSMC_WRITE_OPERATION_ENABLE;
   hsram2.Init.WaitSignal = FSMC_WAIT_SIGNAL_DISABLE;
   hsram2.Init.ExtendedMode = FSMC_EXTENDED_MODE_DISABLE;
   hsram2.Init.AsynchronousWait = FSMC_ASYNCHRONOUS_WAIT_DISABLE;
@@ -1006,12 +988,12 @@ static void MX_FSMC_Init(void)
   hsram3.Init.NSBank = FSMC_NORSRAM_BANK3;
   hsram3.Init.DataAddressMux = FSMC_DATA_ADDRESS_MUX_DISABLE;
   hsram3.Init.MemoryType = FSMC_MEMORY_TYPE_SRAM;
-  hsram3.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_16;
+  hsram3.Init.MemoryDataWidth = FSMC_NORSRAM_MEM_BUS_WIDTH_8;
   hsram3.Init.BurstAccessMode = FSMC_BURST_ACCESS_MODE_DISABLE;
   hsram3.Init.WaitSignalPolarity = FSMC_WAIT_SIGNAL_POLARITY_LOW;
   hsram3.Init.WrapMode = FSMC_WRAP_MODE_DISABLE;
   hsram3.Init.WaitSignalActive = FSMC_WAIT_TIMING_BEFORE_WS;
-  hsram3.Init.WriteOperation = FSMC_WRITE_OPERATION_DISABLE;
+  hsram3.Init.WriteOperation = FSMC_WRITE_OPERATION_ENABLE;
   hsram3.Init.WaitSignal = FSMC_WAIT_SIGNAL_DISABLE;
   hsram3.Init.ExtendedMode = FSMC_EXTENDED_MODE_DISABLE;
   hsram3.Init.AsynchronousWait = FSMC_ASYNCHRONOUS_WAIT_DISABLE;

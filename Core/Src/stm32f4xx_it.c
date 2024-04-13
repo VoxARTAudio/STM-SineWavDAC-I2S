@@ -27,6 +27,7 @@
 #include "mpu6050.h"
 #include "voxart_dev.h"
 #include "imu_parser.h"
+#include "ChorusTest.h"
 
 #include "stm324xg_eval_lcd.h"
 #include "stm324xg_eval_io.h"
@@ -50,7 +51,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-
+extern int chorusEn;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -218,6 +219,7 @@ void SysTick_Handler(void)
   */
 void EXTI0_IRQHandler(void)
 {
+	
   /* USER CODE BEGIN EXTI0_IRQn 0 */
 	if(state != PITCH) {
 		state = PITCH;
@@ -252,75 +254,75 @@ void DMA1_Stream4_IRQHandler(void)
 void TIM1_TRG_COM_TIM11_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 0 */
-	MPU6050_Read_All(&hi2c1, &MPU6050);
+	//MPU6050_Read_All(&hi2c1, &MPU6050);
 
-	parseReverbData();
-	parseChorusData();
-	
-	setStates();
-	
-	if(state == PITCH) {
-		if(MPU6050.KalmanAngleY > 30 && MPU6050.KalmanAngleY < 80) {
-			updateCircle(0, 0, 2);
-		}
-			
-		if(MPU6050.KalmanAngleY > 80 && MPU6050.KalmanAngleY < 190) {
-			updateCircle(0, 0, 6);
-		}
-		
-		if(MPU6050.KalmanAngleY > -185 && MPU6050.KalmanAngleY < -40) {
-			updateCircle(0, 0, -6);
-		}
-		
-		if(MPU6050.KalmanAngleY > -50 && MPU6050.KalmanAngleY < -20) {
-			updateCircle(0, 0, -2);
-		}
-	}
-	
-	if(state == REVERB) {
-		if(imu.x == 1) {
-			//updateCircle(-3, 0, 0);
-		} else if(imu.x == -1) {
-			//updateCircle(3, 0, 0);
-		}
-	}
-	
-	if(state == CHORUS) {
-		if(imu.y == 1) {
-			//serialPrintln("Move Circle +Y");
-			//updateCircle(0, 3, 0);
-		} else if(imu.y == -1) {
-			//serialPrintln("Move Circle -Y");
-			//updateCircle(0, -3, 0);
-		}
-	}
-	
-	switch(state) {
-		case NONE:
-			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
-		break;
-		case PITCH:
-			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
-		break;
-		case REVERB:
-			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_SET);
-			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
-		break;
-		case CHORUS:
-			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_SET);
-		break;
-	}
+//	parseReverbData();
+//	parseChorusData();
+//	
+//	setStates();
+//	
+//	if(state == PITCH) {
+//		if(MPU6050.KalmanAngleY > 30 && MPU6050.KalmanAngleY < 80) {
+//			updateCircle(0, 0, 2);
+//		}
+//			
+//		if(MPU6050.KalmanAngleY > 80 && MPU6050.KalmanAngleY < 190) {
+//			updateCircle(0, 0, 6);
+//		}
+//		
+//		if(MPU6050.KalmanAngleY > -185 && MPU6050.KalmanAngleY < -40) {
+//			updateCircle(0, 0, -6);
+//		}
+//		
+//		if(MPU6050.KalmanAngleY > -50 && MPU6050.KalmanAngleY < -20) {
+//			updateCircle(0, 0, -2);
+//		}
+//	}
+//	
+//	if(state == REVERB) {
+//		if(imu.x == 1) {
+//			//updateCircle(-3, 0, 0);
+//		} else if(imu.x == -1) {
+//			//updateCircle(3, 0, 0);
+//		}
+//	}
+//	
+//	if(state == CHORUS) {
+//		if(imu.y == 1) {
+//			//serialPrintln("Move Circle +Y");
+//			//updateCircle(0, 3, 0);
+//		} else if(imu.y == -1) {
+//			//serialPrintln("Move Circle -Y");
+//			//updateCircle(0, -3, 0);
+//		}
+//	}
+//	
+//	switch(state) {
+//		case NONE:
+//			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_SET);
+//			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+//		break;
+//		case PITCH:
+//			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET);
+//			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+//		break;
+//		case REVERB:
+//			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_SET);
+//			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_RESET);
+//		break;
+//		case CHORUS:
+//			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED3_GPIO_PORT, LED3_PIN, GPIO_PIN_RESET);
+//			HAL_GPIO_WritePin(LED4_GPIO_PORT, LED4_PIN, GPIO_PIN_SET);
+//		break;
+//	}
   /* USER CODE END TIM1_TRG_COM_TIM11_IRQn 0 */
   HAL_TIM_IRQHandler(&htim11);
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 1 */
@@ -349,6 +351,7 @@ void EXTI15_10_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
 	//Reset the circle to starting position
+	chorusEn = !chorusEn;
 	BSP_LCD_Clear(LCD_COLOR_BLACK);
 	serialPrintln("[Cirlce] Reset position and scale");
 	state = NONE;
