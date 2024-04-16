@@ -13,6 +13,9 @@
 #include <stdint.h>
 #include "i2c.h"
 
+#define MPU6050_ADDR 0xD0
+//const double Accel_Z_corrector = 14418.0;
+
 // MPU6050 structure
 typedef struct
 {

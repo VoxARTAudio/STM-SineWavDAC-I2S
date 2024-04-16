@@ -105,8 +105,6 @@ uint32_t played_size = 0;
 //DMA Thingy
 CallBack_Result_t cb_result = UNKNOWN;
 
-extern 
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,6 +124,7 @@ void MX_USB_HOST_Process(void);
 /* USER CODE BEGIN PFP */
 void BSP_AUDIO_OUT_HalfTransfer_CallBack(void);
 void BSP_AUDIO_OUT_TransferComplete_CallBack(void);
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -162,7 +161,6 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
-
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -191,12 +189,15 @@ int main(void)
 	BSP_LCD_Clear(LCD_COLOR_BLACK);
 	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	
-//	while (MPU6050_Init(&hi2c1) == 1) {
-//		HAL_GPIO_TogglePin(LED1_GPIO_PORT, LED1_PIN);
-//		serialPrintln("[MPU6050] MPU ERROR. RESTART SYSTEM");
-//		HAL_Delay(1000);
-//		BSP_LCD_DisplayStringAt(3, 75, (uint8_t *)"Power Cycle :(", CENTER_MODE);
-//	};
+	while (MPU6050_Init(&hi2c1) == 1) {
+		HAL_GPIO_TogglePin(LED1_GPIO_PORT, LED1_PIN);
+		serialPrintln("[MPU6050] MPU ERROR. RESTART SYSTEM");
+		HAL_Delay(1000);
+		BSP_LCD_DisplayStringAt(3, 75, (uint8_t *)"Power Cycle :(", CENTER_MODE);
+	};
+	
+	//I2C nonblocking interrupt
+	//HAL_I2C_Master_Receive_IT(&hi2c1, MPU6050_ADDR, )
 
 	BSP_LCD_FillCircle(c.xPos, c.yPos, c.radius);
 	serialPrintln("[Circle] READY");
@@ -226,7 +227,6 @@ int main(void)
 			fresult = f_mount(&USBHFatFS, USBHPath, 1);
 			f_open(&fil, "faded.wav", FA_READ);
 			BSP_LED_On(LED1);
-		
 			
 			//Get wav header data
 			f_read(&fil, &WaveFormat, sizeof(WaveFormat), &fread_size);
@@ -1045,6 +1045,31 @@ void BSP_AUDIO_OUT_TransferComplete_CallBack() {
 	if(AudioState == AUDIO_STATE_PLAY) {
 	cb_result = FULL_COMPLETED;
 	}
+}
+
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+	  uint8_t Rec_Data[14];
+    int16_t temp;
+
+    // Read 14 BYTES of data starting from ACCEL_XOUT_H register
+
+    //HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 14, i2c_timeout);
+
+    MPU6050.Accel_X_RAW = (int16_t)(Rec_Data[0] << 8 | Rec_Data[1]);
+    MPU6050.Accel_Y_RAW = (int16_t)(Rec_Data[2] << 8 | Rec_Data[3]);
+    MPU6050.Accel_Z_RAW = (int16_t)(Rec_Data[4] << 8 | Rec_Data[5]);
+    temp = (int16_t)(Rec_Data[6] << 8 | Rec_Data[7]);
+    MPU6050.Gyro_X_RAW = (int16_t)(Rec_Data[8] << 8 | Rec_Data[9]);
+    MPU6050.Gyro_Y_RAW = (int16_t)(Rec_Data[10] << 8 | Rec_Data[11]);
+    MPU6050.Gyro_Z_RAW = (int16_t)(Rec_Data[12] << 8 | Rec_Data[13]);
+
+    MPU6050.Ax = MPU6050.Accel_X_RAW / 16384.0;
+    MPU6050.Ay = MPU6050.Accel_Y_RAW / 16384.0;
+    MPU6050.Az = MPU6050.Accel_Z_RAW / 14418.0;;
+    MPU6050.Temperature = (float)((int16_t)temp / (float)340.0 + (float)36.53);
+    MPU6050.Gx = MPU6050.Gyro_X_RAW / 131.0;
+    MPU6050.Gy = MPU6050.Gyro_Y_RAW / 131.0;
+    MPU6050.Gz = MPU6050.Gyro_Z_RAW / 131.0;
 }
 /* USER CODE END 4 */
 
