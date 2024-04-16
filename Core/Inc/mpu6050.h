@@ -11,10 +11,7 @@
 #endif /* INC_GY521_H_ */
 
 #include <stdint.h>
-#include "i2c.h"
-
-#define MPU6050_ADDR 0xD0
-//const double Accel_Z_corrector = 14418.0;
+#include "main.h"
 
 // MPU6050 structure
 typedef struct

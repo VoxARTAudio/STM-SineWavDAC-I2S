@@ -66,6 +66,7 @@ extern int chorusEn;
 
 /* External variables --------------------------------------------------------*/
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
+extern I2C_HandleTypeDef hi2c2;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim11;
@@ -215,25 +216,6 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-  * @brief This function handles EXTI line0 interrupt.
-  */
-void EXTI0_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI0_IRQn 0 */
-	if(state != PITCH) {
-		state = PITCH;
-	} else {
-		state = NONE;
-	}
-	serialPrintln("KEY PRESSED");
-  /* USER CODE END EXTI0_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
-  /* USER CODE BEGIN EXTI0_IRQn 1 */
-
-  /* USER CODE END EXTI0_IRQn 1 */
-}
-
-/**
   * @brief This function handles DMA1 stream4 global interrupt.
   */
 void DMA1_Stream4_IRQHandler(void)
@@ -253,50 +235,49 @@ void DMA1_Stream4_IRQHandler(void)
 void TIM1_TRG_COM_TIM11_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_TRG_COM_TIM11_IRQn 0 */
-	
-	//MPU6050_Read_All(&hi2c1, &MPU6050);
+	//MPU6050_Read_All(&hi2c2, &MPU6050);
 
-//	parseReverbData();
-//	parseChorusData();
-//	
-//	setStates();
-//	
-//	if(state == PITCH) {
-//		if(MPU6050.KalmanAngleY > 30 && MPU6050.KalmanAngleY < 80) {
-//			updateCircle(0, 0, 2);
-//		}
-//			
-//		if(MPU6050.KalmanAngleY > 80 && MPU6050.KalmanAngleY < 190) {
-//			updateCircle(0, 0, 6);
-//		}
-//		
-//		if(MPU6050.KalmanAngleY > -185 && MPU6050.KalmanAngleY < -40) {
-//			updateCircle(0, 0, -6);
-//		}
-//		
-//		if(MPU6050.KalmanAngleY > -50 && MPU6050.KalmanAngleY < -20) {
-//			updateCircle(0, 0, -2);
-//		}
-//	}
-//	
-//	if(state == REVERB) {
-//		if(imu.x == 1) {
-//			//updateCircle(-3, 0, 0);
-//		} else if(imu.x == -1) {
-//			//updateCircle(3, 0, 0);
-//		}
-//	}
-//	
-//	if(state == CHORUS) {
-//		if(imu.y == 1) {
-//			//serialPrintln("Move Circle +Y");
-//			//updateCircle(0, 3, 0);
-//		} else if(imu.y == -1) {
-//			//serialPrintln("Move Circle -Y");
-//			//updateCircle(0, -3, 0);
-//		}
-//	}
-//	
+	parseReverbData();
+	parseChorusData();
+	
+	setStates();
+	
+	if(state == PITCH) {
+		if(MPU6050.KalmanAngleY > 30 && MPU6050.KalmanAngleY < 80) {
+			updateCircle(0, 0, 2);
+		}
+			
+		if(MPU6050.KalmanAngleY > 80 && MPU6050.KalmanAngleY < 190) {
+			updateCircle(0, 0, 6);
+		}
+		
+		if(MPU6050.KalmanAngleY > -185 && MPU6050.KalmanAngleY < -40) {
+			updateCircle(0, 0, -6);
+		}
+		
+		if(MPU6050.KalmanAngleY > -50 && MPU6050.KalmanAngleY < -20) {
+			updateCircle(0, 0, -2);
+		}
+	}
+	
+	if(state == REVERB) {
+		if(imu.x == 1) {
+			//updateCircle(-3, 0, 0);
+		} else if(imu.x == -1) {
+			//updateCircle(3, 0, 0);
+		}
+	}
+	
+	if(state == CHORUS) {
+		if(imu.y == 1) {
+			//serialPrintln("Move Circle +Y");
+			//updateCircle(0, 3, 0);
+		} else if(imu.y == -1) {
+			//serialPrintln("Move Circle -Y");
+			//updateCircle(0, -3, 0);
+		}
+	}
+	
 //	switch(state) {
 //		case NONE:
 //			HAL_GPIO_WritePin(LED1_GPIO_PORT, LED1_PIN, GPIO_PIN_SET);
@@ -345,26 +326,17 @@ void TIM2_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles EXTI line[15:10] interrupts.
+  * @brief This function handles I2C2 event interrupt.
   */
-void EXTI15_10_IRQHandler(void)
+void I2C2_EV_IRQHandler(void)
 {
-  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
-	//Reset the circle to starting position
-	chorusEn = !chorusEn;
-	BSP_LCD_Clear(LCD_COLOR_BLACK);
-	serialPrintln("[Cirlce] Reset position and scale");
-	state = NONE;
-	BSP_LCD_FillCircle(150, 120, 50);
-	c.xPos = 150;
-	c.yPos = 120;
-	c.radius = 50;
-  /* USER CODE END EXTI15_10_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(Tamper_Button_Pin);
-  HAL_GPIO_EXTI_IRQHandler(User_Button_Pin);
-  /* USER CODE BEGIN EXTI15_10_IRQn 1 */
+  /* USER CODE BEGIN I2C2_EV_IRQn 0 */
 
-  /* USER CODE END EXTI15_10_IRQn 1 */
+  /* USER CODE END I2C2_EV_IRQn 0 */
+  HAL_I2C_EV_IRQHandler(&hi2c2);
+  /* USER CODE BEGIN I2C2_EV_IRQn 1 */
+
+  /* USER CODE END I2C2_EV_IRQn 1 */
 }
 
 /**

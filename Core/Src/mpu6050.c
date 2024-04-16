@@ -46,6 +46,7 @@
 #define GYRO_XOUT_H_REG 0x43
 
 // Setup MPU6050
+#define MPU6050_ADDR 0xD0
 const uint16_t i2c_timeout = 100;
 const double Accel_Z_corrector = 14418.0;
 
@@ -93,7 +94,6 @@ uint8_t MPU6050_Init(I2C_HandleTypeDef *I2Cx)
         HAL_I2C_Mem_Write(I2Cx, MPU6050_ADDR, GYRO_CONFIG_REG, 1, &Data, 1, i2c_timeout);
         return 0;
     }
-		//HAL_I2C_Master_Receive_IT(
     return 1;
 }
 
@@ -161,7 +161,7 @@ void MPU6050_Read_All(I2C_HandleTypeDef *I2Cx, MPU6050_t *DataStruct)
 
     // Read 14 BYTES of data starting from ACCEL_XOUT_H register
 
-    //HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 14, i2c_timeout);
+    HAL_I2C_Mem_Read(I2Cx, MPU6050_ADDR, ACCEL_XOUT_H_REG, 1, Rec_Data, 14, i2c_timeout);
 
     DataStruct->Accel_X_RAW = (int16_t)(Rec_Data[0] << 8 | Rec_Data[1]);
     DataStruct->Accel_Y_RAW = (int16_t)(Rec_Data[2] << 8 | Rec_Data[3]);
